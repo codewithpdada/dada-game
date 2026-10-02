@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=none">
+    <title>Ludo King Master - Online & Offline Room Arena</title>
+
+    <!-- Tailwind CSS & Icons -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        fredoka: ['"Fredoka One"', 'cursive'],
+                        montserrat: ['"Montserrat"', 'sans-serif'],
+                    },
+                    colors: {
+                        ludoRed: '#E11D48',
+                        ludoGreen: '#10B981',
+                        ludoYellow: '#F59E0B',
+                        ludoBlue: '#2563EB',
+                        goldBoard: '#D97706',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: radial-gradient(circle at center, #1e1b4b 0%, #0f172a 100%);
+            min-h: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Ludo Board Framework */
+        .board-container {
+            background: linear-gradient(145deg, #b45309, #78350f);
+            border: 10px solid #fef3c7;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), inset 0 0 15px rgba(0,0,0,0.5);
+            border-radius: 28px;
+            position: relative;
+        }
+
+        .ludo-grid {
+            display: grid;
+            grid-template-columns: repeat(15, minmax(0, 1fr));
+            grid-template-rows: repeat(15, minmax(0, 1fr));
+            aspect-ratio: 1 / 1;
+            background: #0f172a;
+            border-radius: 18px;
+            overflow: hidden;
+            border: 3px solid #fef3c7;
+        }
+
+        /* Grid Cell Styling */
+        .cell {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 0.5px solid rgba(255, 255, 255, 0.15);
+        }
+
+        /* 3D Dice Simulation */
+        .dice-container {
+            perspective: 600px;
+        }
+
+        .dice {
+            width: 58px;
+            height: 58px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.3, 1);
+            cursor: pointer;
+        }
+
+        .dice-face {
+            position: absolute;
+            width: 58px;
+            height: 58px;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #e2e8f0);
+            border: 2px solid #94a3b8;
+            border-radius: 12px;
+            display: grid;
+            grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+            padding: 6px;
+            box-shadow: inset 0 0 8px rgba(0,0,0,0.2), 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .dice-dot {
+            background-color: #0f172a;
+            border-radius: 50%;
+            margin: auto;
+            width: 9px;
+            height: 9px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .dice-face[data-face="1"] { transform: rotateY(0deg) translateZ(29px); }
+        .dice-face[data-face="6"] { transform: rotateY(180deg) translateZ(29px); }
+        .dice-face[data-face="2"] { transform: rotateY(-90deg) translateZ(29px); }
+        .dice-face[data-face="5"] { transform: rotateY(90deg) translateZ(29px); }
+        .dice-face[data-face="3"] { transform: rotateX(-90deg) translateZ(29px); }
+        .dice-face[data-face="4"] { transform: rotateX(90deg) translateZ(29px); }
+
+        /* Tokens (Pawns) Styling */
+        .pawn {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            position: absolute;
+            z-index: 20;
+            transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 5px 8px rgba(0, 0, 0, 0.5), inset 0 3px 4px rgba(255,255,255,0.8);
+        }
+
+        .pawn-movable {
+            animation: pulseGlow 1.1s infinite alternate;
+            z-index: 40 !important;
+        }
+
+        @keyframes pulseGlow {
+            0% { transform: scale(1); filter: drop-shadow(0 0 4px #fbbf24); }
+            100% { transform: scale(1.25); filter: drop-shadow(0 0 12px #fbbf24); }
+        }
+
+        /* Stacking Count Indicator */
+        .stack-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #f59e0b;
+            color: #000;
+            font-size: 10px;
+            font-weight: 900;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1.5px solid #fff;
+            z-index: 45;
+        }
+
+        /* Glass Panel Container */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.75);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        /* Ludo Triangle Clipping */
+        .triangle-red { clip-path: polygon(0 0, 50% 50%, 0 100%); }
+        .triangle-green { clip-path: polygon(0 0, 50% 50%, 100% 0); }
+        .triangle-yellow { clip-path: polygon(100% 0, 50% 50%, 100% 100%); }
+        .triangle-blue { clip-path: polygon(0 100%, 50% 50%, 100% 100%); }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100 flex flex-col justify-between">
+
+    <!-- TOP NAVIGATION HEADER -->
+    <header class="w-full glass-panel px-4 py-2.5 flex justify-between items-center z-40 border-b border-slate-700/80">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-gradient-to-tr from-amber-400 via-yellow-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg border border-amber-300">
+                <i class="fa-solid fa-crown text-xl text-slate-950"></i>
+            </div>
+            <div>
+                <h1 class="font-fredoka text-xl tracking-wide bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 bg-clip-text text-transparent">
+                    LUDO KING
+                </h1>
+                <p class="text-[10px] text-amber-300/80 font-bold tracking-widest uppercase">Master Arena</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <button id="soundBtn" onclick="toggleSound()" class="p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-amber-400 transition">
+                <i id="soundIcon" class="fa-solid fa-volume-high"></i>
+            </button>
+            <button onclick="showRulesModal()" class="p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-300 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-circle-info text-sky-400"></i>
+                <span class="hidden sm:inline">Rules</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-grow flex items-center justify-center p-2 sm:p-4 relative">
+
+        <!-- VIEW 1: LOBBY & ROOM SELECTOR -->
+        <div id="lobbyView" class="w-full max-w-md glass-panel rounded-3xl p-6 shadow-2xl relative z-30 my-auto">
+            <div class="text-center mb-6">
+                <div class="inline-block p-3 rounded-full bg-amber-500/10 border border-amber-400/30 mb-2">
+                    <i class="fa-solid fa-dice-d6 text-3xl text-amber-400"></i>
+                </div>
+                <h2 class="font-fredoka text-3xl text-amber-400">Choose Game Mode</h2>
+                <p class="text-xs text-slate-400 mt-1">Play online, with friends or practice with AI bots</p>
+            </div>
+
+            <div class="space-y-3">
+                <button onclick="selectMode('pass')" class="w-full py-4 px-5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-2xl font-bold flex items-center justify-between shadow-lg transition transform active:scale-95 border border-emerald-400/30">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-users text-2xl text-emerald-200"></i>
+                        <div class="text-left">
+                            <div class="font-fredoka text-lg">Pass & Play</div>
+                            <div class="text-[11px] text-emerald-100/80 font-normal">Play offline on same device</div>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+
+                <button onclick="selectMode('ai')" class="w-full py-4 px-5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 rounded-2xl font-bold flex items-center justify-between shadow-lg transition transform active:scale-95 border border-indigo-400/30">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-robot text-2xl text-indigo-200"></i>
+                        <div class="text-left">
+                            <div class="font-fredoka text-lg">Play vs Computer</div>
+                            <div class="text-[11px] text-indigo-100/80 font-normal">Challenge smart AI opponents</div>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+
+                <button onclick="selectMode('online')" class="w-full py-4 px-5 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 rounded-2xl font-bold flex items-center justify-between shadow-lg transition transform active:scale-95 border border-amber-300">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-globe text-2xl"></i>
+                        <div class="text-left">
+                            <div class="font-fredoka text-lg">Online Room Play</div>
+                            <div class="text-[11px] text-slate-900/80 font-semibold">Create or Join with 6-digit Code</div>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- VIEW 2: ROOM SETUP MODAL -->
+        <div id="roomSetupModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+            <div class="glass-panel p-6 rounded-3xl max-w-md w-full space-y-5 border border-amber-500/30">
+                <div class="flex justify-between items-center border-b border-slate-700/80 pb-3">
+                    <h3 id="setupModalTitle" class="font-fredoka text-2xl text-amber-400">Configure Room</h3>
+                    <button onclick="closeSetupModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Player Name</label>
+                        <input type="text" id="playerNameInput" value="King Player" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-semibold focus:outline-none focus:border-amber-400">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Number of Players</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="setPlayerCount(2)" id="cntBtn2" class="py-3 rounded-xl border border-slate-700 font-bold bg-slate-800 text-slate-300">2 Players</button>
+                            <button onclick="setPlayerCount(3)" id="cntBtn3" class="py-3 rounded-xl border-2 border-amber-400 font-bold bg-amber-500/20 text-amber-300">3 Players</button>
+                            <button onclick="setPlayerCount(4)" id="cntBtn4" class="py-3 rounded-xl border border-slate-700 font-bold bg-slate-800 text-slate-300">4 Players</button>
+                        </div>
+                    </div>
+
+                    <div id="onlineRoomInputGroup" class="hidden space-y-3">
+                        <div class="flex gap-2">
+                            <button onclick="setOnlineSubMode('create')" id="subCreateBtn" class="flex-1 py-2.5 rounded-xl font-bold text-xs bg-amber-500 text-slate-950">Create Room</button>
+                            <button onclick="setOnlineSubMode('join')" id="subJoinBtn" class="flex-1 py-2.5 rounded-xl font-bold text-xs bg-slate-800 text-slate-400">Join Room</button>
+                        </div>
+                        <div id="joinCodeBox" class="hidden">
+                            <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Enter 6-Digit Room Code</label>
+                            <input type="text" id="joinRoomCodeInput" placeholder="e.g. 849201" maxlength="6" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-amber-400 font-bold text-center tracking-widest text-lg uppercase focus:outline-none focus:border-amber-400">
+                        </div>
+                    </div>
+
+                    <button onclick="startConfiguredGame()" class="w-full py-4 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-fredoka text-lg rounded-2xl shadow-xl transition transform active:scale-95 mt-2">
+                        Start Game
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 3: ACTIVE GAME ARENA -->
+        <div id="gameArena" class="w-full max-w-5xl hidden flex-col lg:flex-row gap-4 items-center justify-center my-auto">
+
+            <!-- LEFT/TOP: Player Cards & Turn Info -->
+            <div class="w-full lg:w-72 flex flex-col gap-3">
+                <div class="glass-panel p-3.5 rounded-2xl flex items-center justify-between border border-slate-700">
+                    <div>
+                        <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Room Code</span>
+                        <span id="arenaRoomCode" class="font-fredoka text-lg text-amber-400 tracking-wider">PASS-PLAY</span>
+                    </div>
+                    <span id="arenaModeBadge" class="bg-amber-500/20 text-amber-300 text-xs px-3 py-1 rounded-xl font-bold border border-amber-400/40">
+                        3 Players
+                    </span>
+                </div>
+
+                <!-- Active Players Grid -->
+                <div class="grid grid-cols-2 lg:grid-cols-1 gap-2">
+                    <!-- RED -->
+                    <div id="pCard-red" class="glass-panel p-2.5 rounded-xl border-2 border-red-500/30 flex items-center justify-between transition-all">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-full bg-red-500 border-2 border-white/80 flex items-center justify-center font-bold text-white text-xs shadow">R</div>
+                            <div class="truncate max-w-[80px]"><p id="pName-red" class="font-bold text-xs text-slate-200 truncate">Red</p></div>
+                        </div>
+                        <div id="pTimer-red" class="hidden w-2 h-2 rounded-full bg-red-500 animate-ping"></div>
+                    </div>
+                    <!-- GREEN -->
+                    <div id="pCard-green" class="glass-panel p-2.5 rounded-xl border-2 border-emerald-500/30 flex items-center justify-between transition-all">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-full bg-emerald-500 border-2 border-white/80 flex items-center justify-center font-bold text-white text-xs shadow">G</div>
+                            <div class="truncate max-w-[80px]"><p id="pName-green" class="font-bold text-xs text-slate-200 truncate">Green</p></div>
+                        </div>
+                        <div id="pTimer-green" class="hidden w-2 h-2 rounded-full bg-emerald-500 animate-ping"></div>
+                    </div>
+                    <!-- YELLOW -->
+                    <div id="pCard-yellow" class="glass-panel p-2.5 rounded-xl border-2 border-amber-500/30 flex items-center justify-between transition-all">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-full bg-amber-500 border-2 border-white/80 flex items-center justify-center font-bold text-white text-xs shadow">Y</div>
+                            <div class="truncate max-w-[80px]"><p id="pName-yellow" class="font-bold text-xs text-slate-200 truncate">Yellow</p></div>
+                        </div>
+                        <div id="pTimer-yellow" class="hidden w-2 h-2 rounded-full bg-amber-500 animate-ping"></div>
+                    </div>
+                    <!-- BLUE -->
+                    <div id="pCard-blue" class="glass-panel p-2.5 rounded-xl border-2 border-blue-500/30 flex items-center justify-between transition-all">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-full bg-blue-500 border-2 border-white/80 flex items-center justify-center font-bold text-white text-xs shadow">B</div>
+                            <div class="truncate max-w-[80px]"><p id="pName-blue" class="font-bold text-xs text-slate-200 truncate">Blue</p></div>
+                        </div>
+                        <div id="pTimer-blue" class="hidden w-2 h-2 rounded-full bg-blue-500 animate-ping"></div>
+                    </div>
+                </div>
+
+                <!-- DICE ROLLER PANEL -->
+                <div class="glass-panel p-4 rounded-2xl flex flex-col items-center justify-center text-center space-y-3">
+                    <div class="text-[10px] uppercase font-extrabold tracking-widest text-slate-400">Current Turn</div>
+                    <div id="turnBanner" class="font-fredoka text-lg text-amber-400">Red Turn</div>
+
+                    <div class="dice-container my-1" onclick="handleDiceRollClick()">
+                        <div id="dice3d" class="dice">
+                            <div class="dice-face" data-face="1"><div class="dice-dot col-start-2 row-start-2"></div></div>
+                            <div class="dice-face" data-face="6"><div class="dice-dot"></div><div class="dice-dot"></div><div class="dice-dot"></div><div class="dice-dot"></div><div class="dice-dot"></div><div class="dice-dot"></div></div>
+                            <div class="dice-face" data-face="2"><div class="dice-dot"></div><div class="dice-dot col-start-3 row-start-3"></div></div>
+                            <div class="dice-face" data-face="5"><div class="dice-dot"></div><div class="dice-dot col-start-3 row-start-1"></div><div class="dice-dot col-start-2 row-start-2"></div><div class="dice-dot col-start-1 row-start-3"></div><div class="dice-dot col-start-3 row-start-3"></div></div>
+                            <div class="dice-face" data-face="3"><div class="dice-dot"></div><div class="dice-dot col-start-2 row-start-2"></div><div class="dice-dot col-start-3 row-start-3"></div></div>
+                            <div class="dice-face" data-face="4"><div class="dice-dot"></div><div class="dice-dot col-start-3 row-start-1"></div><div class="dice-dot col-start-1 row-start-3"></div><div class="dice-dot col-start-3 row-start-3"></div></div>
+                        </div>
+                    </div>
+
+                    <button id="rollDiceBtn" onclick="handleDiceRollClick()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-fredoka rounded-xl shadow-lg transition active:scale-95 disabled:opacity-50">
+                        ROLL DICE
+                    </button>
+                    <p id="actionGuide" class="text-xs text-slate-300 font-medium">Tap dice to roll</p>
+                </div>
+            </div>
+
+            <!-- BOARD ARENA -->
+            <div class="w-full max-w-[480px] aspect-square board-container p-2 flex items-center justify-center">
+                <div id="ludoBoard" class="ludo-grid w-full h-full relative">
+                    <!-- Dynamic Grid Render -->
+                </div>
+            </div>
+
+            <!-- RIGHT/BOTTOM: LOG & EXIT -->
+            <div class="w-full lg:w-60 flex flex-col gap-3">
+                <div class="glass-panel p-3.5 rounded-2xl flex-grow flex flex-col h-48 lg:h-[400px]">
+                    <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-700/80">
+                        <span class="text-[11px] font-bold uppercase text-slate-400"><i class="fa-solid fa-list-check mr-1"></i> Match Log</span>
+                    </div>
+                    <div id="logBox" class="flex-grow overflow-y-auto space-y-1.5 text-xs font-medium pr-1 text-slate-300">
+                        <p class="text-amber-300/80 italic text-[11px]">Game initialized!</p>
+                    </div>
+                </div>
+
+                <button onclick="leaveMatch()" class="w-full py-3 bg-slate-800/80 hover:bg-slate-700 text-rose-400 border border-slate-700 font-bold rounded-xl text-xs transition">
+                    <i class="fa-solid fa-door-open mr-1.5"></i> Exit Game
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- VICTORY MODAL -->
+    <div id="victoryModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel p-8 rounded-3xl max-w-sm w-full text-center space-y-5 border border-amber-500/40 shadow-2xl">
+            <div class="w-20 h-20 bg-gradient-to-tr from-amber-400 to-yellow-300 rounded-full flex items-center justify-center mx-auto shadow-xl animate-bounce">
+                <i class="fa-solid fa-trophy text-4xl text-slate-950"></i>
+            </div>
+            <div>
+                <h3 class="font-fredoka text-3xl text-amber-400">VICTORY!</h3>
+                <p id="winnerText" class="text-slate-200 font-bold text-sm mt-1">Red Player won the match!</p>
+            </div>
+            <div id="rankingList" class="bg-slate-900/90 p-4 rounded-2xl space-y-2 text-xs font-bold border border-slate-800">
+                <!-- Rankings -->
+            </div>
+            <button onclick="location.reload()" class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-fredoka rounded-xl shadow-lg">
+                Back to Lobby
+            </button>
+        </div>
+    </div>
+
+    <!-- RULES MODAL -->
+    <div id="rulesModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel p-6 rounded-3xl max-w-md w-full space-y-4 border border-slate-700">
+            <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+                <h3 class="font-fredoka text-xl text-amber-400">Ludo Rules Guide</h3>
+                <button onclick="hideRulesModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-2.5 text-xs text-slate-300 leading-relaxed max-h-72 overflow-y-auto pr-2">
+                <p><strong class="text-white">1. Starting Out:</strong> Needs a <span class="text-amber-400 font-bold">6</span> to release pawn from yard.</p>
+                <p><strong class="text-white">2. Safe Stars:</strong> Star marked cells are safe from capture.</p>
+                <p><strong class="text-white">3. Extra Rolls:</strong> Rolling 6, capturing an enemy pawn, or reaching Home grants an extra roll.</p>
+                <p><strong class="text-white">4. Three 6s Penalty:</strong> Rolling three consecutive 6s forfeits the turn.</p>
+                <p><strong class="text-white">5. Exact Roll:</strong> Tokens need exact roll value to enter final center finish.</p>
+            </div>
+            <button onclick="hideRulesModal()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 font-bold text-white rounded-xl text-xs">Close</button>
+        </div>
+    </div>
+
+    <script>
+        const COLOR_KEYS = ['red', 'green', 'yellow', 'blue'];
+        const COLOR_HEX = {
+            red: '#E11D48',
+            green: '#10B981',
+            yellow: '#F59E0B',
+            blue: '#2563EB'
+        };
+
+        let soundEnabled = true;
+        let selectedCount = 3;
+        let selectedMode = 'pass'; // 'pass', 'ai', 'online'
+        let onlineSubMode = 'create';
+        let currentRoomCode = '';
+
+        let activePlayers = ['red', 'green', 'yellow'];
+        let turnIndex = 0;
+        let currentDiceValue = 1;
+        let hasRolled = false;
+        let isDiceRolling = false;
+        let consecutiveSixes = 0;
+        let finishedRankings = [];
+
+        // Pawns state (-1 = yard, 0..51 = outer track, 100..104 = home path, 999 = finished)
+        let pawns = {
+            red: [-1, -1, -1, -1],
+            green: [-1, -1, -1, -1],
+            yellow: [-1, -1, -1, -1],
+            blue: [-1, -1, -1, -1]
+        };
+
+        const OUTER_TRACK = [
+            [1, 6], [2, 6], [3, 6], [4, 6], [5, 6],
+            [6, 5], [6, 4], [6, 3], [6, 2], [6, 1], [6, 0],
+            [7, 0], [8, 0],
+            [8, 1], [8, 2], [8, 3], [8, 4], [8, 5],
+            [9, 6], [10, 6], [11, 6], [12, 6], [13, 6], [14, 6],
+            [14, 7], [14, 8],
+            [13, 8], [12, 8], [11, 8], [10, 8], [9, 8],
+            [8, 9], [8, 10], [8, 11], [8, 12], [8, 13], [8, 14],
+            [7, 14], [6, 14],
+            [6, 13], [6, 12], [6, 11], [6, 10], [6, 9],
+            [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8],
+            [0, 7], [0, 6]
+        ];
+
+        const START_INDEX = { red: 0, green: 13, yellow: 26, blue: 39 };
+
+        const HOME_PATHS = {
+            red: [[1,7], [2,7], [3,7], [4,7], [5,7]],
+            green: [[7,1], [7,2], [7,3], [7,4], [7,5]],
+            yellow: [[13,7], [12,7], [11,7], [10,7], [9,7]],
+            blue: [[7,13], [7,12], [7,11], [7,10], [7,9]]
+        };
+
+        const YARD_COORDS = {
+            red: [[1.5, 1.5], [3.5, 1.5], [1.5, 3.5], [3.5, 3.5]],
+            green: [[10.5, 1.5], [12.5, 1.5], [10.5, 3.5], [12.5, 3.5]],
+            yellow: [[10.5, 10.5], [12.5, 10.5], [10.5, 12.5], [12.5, 12.5]],
+            blue: [[1.5, 10.5], [3.5, 10.5], [1.5, 12.5], [3.5, 12.5]]
+        };
+
+        const SAFE_STARS = [0, 8, 13, 21, 26, 34, 39, 47];
+
+        function playAudio(type) {
+            if (!soundEnabled) return;
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                if (type === 'roll') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(240, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.12);
+                    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+                    osc.start(); osc.stop(ctx.currentTime + 0.12);
+                } else if (type === 'move') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(450, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(750, ctx.currentTime + 0.08);
+                    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+                    osc.start(); osc.stop(ctx.currentTime + 0.08);
+                } else if (type === 'capture') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(700, ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.25);
+                    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+                    osc.start(); osc.stop(ctx.currentTime + 0.25);
+                }
+            } catch(e) {}
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('soundIcon').className = soundEnabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark text-slate-500';
+        }
+
+        function selectMode(mode) {
+            selectedMode = mode;
+            document.getElementById('setupModalTitle').innerText = mode === 'pass' ? 'Pass & Play Setup' : (mode === 'ai' ? 'Play vs AI Setup' : 'Online Room Setup');
+            document.getElementById('onlineRoomInputGroup').classList.toggle('hidden', mode !== 'online');
+            document.getElementById('roomSetupModal').classList.remove('hidden');
+        }
+
+        function closeSetupModal() {
+            document.getElementById('roomSetupModal').classList.add('hidden');
+        }
+
+        function setPlayerCount(count) {
+            selectedCount = count;
+            [2, 3, 4].forEach(n => {
+                const b = document.getElementById(`cntBtn${n}`);
+                b.className = n === count ? "py-3 rounded-xl border-2 border-amber-400 font-bold bg-amber-500/20 text-amber-300" : "py-3 rounded-xl border border-slate-700 font-bold bg-slate-800 text-slate-300";
+            });
+        }
+
+        function setOnlineSubMode(sub) {
+            onlineSubMode = sub;
+            document.getElementById('subCreateBtn').className = sub === 'create' ? "flex-1 py-2.5 rounded-xl font-bold text-xs bg-amber-500 text-slate-950" : "flex-1 py-2.5 rounded-xl font-bold text-xs bg-slate-800 text-slate-400";
+            document.getElementById('subJoinBtn').className = sub === 'join' ? "flex-1 py-2.5 rounded-xl font-bold text-xs bg-amber-500 text-slate-950" : "flex-1 py-2.5 rounded-xl font-bold text-xs bg-slate-800 text-slate-400";
+            document.getElementById('joinCodeBox').classList.toggle('hidden', sub !== 'create');
+        }
+
+        function startConfiguredGame() {
+            closeSetupModal();
+            document.getElementById('lobbyView').classList.add('hidden');
+            document.getElementById('gameArena').classList.remove('hidden');
+            document.getElementById('gameArena').classList.add('flex');
+
+            if (selectedCount === 2) activePlayers = ['red', 'yellow'];
+            else if (selectedCount === 3) activePlayers = ['red', 'green', 'yellow'];
+            else activePlayers = ['red', 'green', 'yellow', 'blue'];
+
+            const name = document.getElementById('playerNameInput').value.trim() || 'Player 1';
+            currentRoomCode = selectedMode === 'online' ? (onlineSubMode === 'join' ? (document.getElementById('joinRoomCodeInput').value.toUpperCase() || 'LK9901') : Math.floor(100000 + Math.random() * 900000).toString()) : 'LOCAL-MATCH';
+
+            document.getElementById('arenaRoomCode').innerText = currentRoomCode;
+            document.getElementById('arenaModeBadge').innerText = `${selectedCount} Players`;
+
+            COLOR_KEYS.forEach(c => {
+                const card = document.getElementById(`pCard-${c}`);
+                if (activePlayers.includes(c)) {
+                    card.classList.remove('opacity-25');
+                } else {
+                    card.classList.add('opacity-25');
+                }
+            });
+
+            document.getElementById('pName-red').innerText = name;
+            if (selectedMode === 'ai') {
+                if (activePlayers.includes('green')) document.getElementById('pName-green').innerText = 'Bot Green';
+                if (activePlayers.includes('yellow')) document.getElementById('pName-yellow').innerText = 'Bot Yellow';
+                if (activePlayers.includes('blue')) document.getElementById('pName-blue').innerText = 'Bot Blue';
+            }
+
+            buildBoard();
+            resetPawns();
+            updateTurnUI();
+            addLog(`Game started with ${selectedCount} players!`);
+        }
+
+        function buildBoard() {
+            const board = document.getElementById('ludoBoard');
+            board.innerHTML = '';
+
+            for (let r = 0; r < 15; r++) {
+                for (let c = 0; c < 15; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.r = r;
+                    cell.dataset.c = c;
+
+                    // Yard colored sectors
+                    if (r < 6 && c < 6) cell.style.backgroundColor = '#E11D48';
+                    else if (r < 6 && c > 8) cell.style.backgroundColor = '#10B981';
+                    else if (r > 8 && c > 8) cell.style.backgroundColor = '#F59E0B';
+                    else if (r > 8 && c < 6) cell.style.backgroundColor = '#2563EB';
+                    else if (r >= 6 && r <= 8 && c >= 6 && c <= 8) cell.style.backgroundColor = '#0F172A';
+                    else cell.style.backgroundColor = '#1E293B';
+
+                    // Track path highlights
+                    if (c === 1 && r === 6) cell.style.backgroundColor = '#E11D48';
+                    if (r === 7 && c > 0 && c < 6) cell.style.backgroundColor = '#FDA4AF';
+
+                    if (c === 8 && r === 1) cell.style.backgroundColor = '#10B981';
+                    if (c === 7 && r > 0 && r < 6) cell.style.backgroundColor = '#6EE7B7';
+
+                    if (c === 13 && r === 8) cell.style.backgroundColor = '#F59E0B';
+                    if (r === 7 && c > 8 && c < 14) cell.style.backgroundColor = '#FDE68A';
+
+                    if (c === 6 && r === 13) cell.style.backgroundColor = '#2563EB';
+                    if (c === 7 && r > 8 && r < 14) cell.style.backgroundColor = '#93C5FD';
+
+                    // Stars
+                    if ((r === 6 && c === 1) || (r === 2 && c === 6) || (r === 1 && c === 8) || (r === 6 && c === 12) ||
+                        (r === 8 && c === 13) || (r === 12 && c === 8) || (r === 13 && c === 6) || (r === 8 && c === 2)) {
+                        const star = document.createElement('i');
+                        star.className = 'fa-solid fa-star text-amber-300 text-[10px] z-10';
+                        cell.appendChild(star);
+                    }
+
+                    board.appendChild(cell);
+                }
+            }
+
+            // Inner Yard Boxes
+            createYardBox(0, 0, '#FFF1F2');
+            createYardBox(0, 9, '#ECFDF5');
+            createYardBox(9, 9, '#FFFBEB');
+            createYardBox(9, 0, '#EFF6FF');
+
+            // Center Finish Triangles
+            const center = document.createElement('div');
+            center.style.gridColumn = '7 / span 3';
+            center.style.gridRow = '7 / span 3';
+            center.className = 'relative w-full h-full bg-slate-900 overflow-hidden rounded';
+            center.innerHTML = `
+                <div class="absolute inset-0 bg-rose-600 triangle-red"></div>
+                <div class="absolute inset-0 bg-emerald-500 triangle-green"></div>
+                <div class="absolute inset-0 bg-amber-500 triangle-yellow"></div>
+                <div class="absolute inset-0 bg-blue-600 triangle-blue"></div>
+                <div class="absolute inset-[25%] bg-slate-950 rounded-full flex items-center justify-center border border-amber-400">
+                    <i class="fa-solid fa-crown text-amber-400 text-xs"></i>
+                </div>
+            `;
+            board.appendChild(center);
+        }
+
+        function createYardBox(sr, sc, bg) {
+            const box = document.createElement('div');
+            box.style.gridColumn = `${sc + 2} / span 4`;
+            box.style.gridRow = `${sr + 2} / span 4`;
+            box.style.backgroundColor = bg;
+            box.className = 'rounded-xl border-4 border-slate-900/40 z-0 shadow-inner';
+            document.getElementById('ludoBoard').appendChild(box);
+        }
+
+        function resetPawns() {
+            pawns = {
+                red: [-1, -1, -1, -1],
+                green: [-1, -1, -1, -1],
+                yellow: [-1, -1, -1, -1],
+                blue: [-1, -1, -1, -1]
+            };
+            renderPawns();
+        }
+
+        function renderPawns() {
+            document.querySelectorAll('.pawn').forEach(e => e.remove());
+
+            // Track positions to detect stacking
+            const posMap = {};
+
+            COLOR_KEYS.forEach(color => {
+                if (!activePlayers.includes(color)) return;
+
+                pawns[color].forEach((pos, pIdx) => {
+                    if (pos === 999) return;
+
+                    let col, row;
+                    if (pos === -1) {
+                        [col, row] = YARD_COORDS[color][pIdx];
+                    } else if (pos >= 0 && pos < 52) {
+                        [col, row] = OUTER_TRACK[pos];
+                    } else if (pos >= 100 && pos <= 104) {
+                        [col, row] = HOME_PATHS[color][pos - 100];
+                    }
+
+                    const key = `${col}_${row}`;
+                    posMap[key] = (posMap[key] || 0) + 1;
+
+                    const p = document.createElement('div');
+                    p.className = `pawn pawn-${color}`;
+                    p.dataset.color = color;
+                    p.dataset.index = pIdx;
+                    p.style.backgroundColor = COLOR_HEX[color];
+                    p.style.borderColor = '#FFFFFF';
+                    p.style.borderWidth = '2px';
+
+                    p.innerHTML = `<i class="fa-solid fa-chess-knight text-[9px] text-white"></i>`;
+                    p.style.left = `${(col / 15) * 100 + 0.4}%`;
+                    p.style.top = `${(row / 15) * 100 + 0.4}%`;
+                    p.style.width = '6.2%';
+                    p.style.height = '6.2%';
+
+                    p.onclick = (e) => {
+                        e.stopPropagation();
+                        onPawnClick(color, pIdx);
+                    };
+
+                    document.getElementById('ludoBoard').appendChild(p);
+                });
+            });
+
+            highlightMovablePawns();
+        }
+
+        function updateTurnUI() {
+            const currentColor = activePlayers[turnIndex];
+            const banner = document.getElementById('turnBanner');
+            banner.innerText = `${currentColor.toUpperCase()} Turn`;
+            banner.style.color = COLOR_HEX[currentColor];
+
+            COLOR_KEYS.forEach(c => {
+                const timer = document.getElementById(`pTimer-${c}`);
+                const card = document.getElementById(`pCard-${c}`);
+                if (c === currentColor) {
+                    timer.classList.remove('hidden');
+                    card.classList.add('ring-2', 'ring-amber-400');
+                } else {
+                    timer.classList.add('hidden');
+                    card.classList.remove('ring-2', 'ring-amber-400');
+                }
+            });
+
+            document.getElementById('rollDiceBtn').disabled = hasRolled;
+            document.getElementById('actionGuide').innerText = hasRolled ? "Tap a glowing pawn to move" : "Tap dice to roll";
+
+            // AI turn automation
+            if (selectedMode === 'ai' && currentColor !== 'red' && !hasRolled && !isDiceRolling) {
+                setTimeout(() => handleDiceRollClick(), 700);
+            }
+        }
+
+        function handleDiceRollClick() {
+            if (hasRolled || isDiceRolling) return;
+
+            isDiceRolling = true;
+            playAudio('roll');
+
+            const roll = Math.floor(Math.random() * 6) + 1;
+            currentDiceValue = roll;
+
+            const dice = document.getElementById('dice3d');
+            const rx = (Math.floor(Math.random() * 3) + 2) * 360;
+            const ry = (Math.floor(Math.random() * 3) + 2) * 360;
+
+            let rot = '';
+            switch(roll) {
+                case 1: rot = `rotateX(${rx}deg) rotateY(${ry}deg)`; break;
+                case 2: rot = `rotateX(${rx}deg) rotateY(${ry + 90}deg)`; break;
+                case 3: rot = `rotateX(${rx + 90}deg) rotateY(${ry}deg)`; break;
+                case 4: rot = `rotateX(${rx - 90}deg) rotateY(${ry}deg)`; break;
+                case 5: rot = `rotateX(${rx}deg) rotateY(${ry - 90}deg)`; break;
+                case 6: rot = `rotateX(${rx}deg) rotateY(${ry + 180}deg)`; break;
+            }
+
+            dice.style.transform = rot;
+
+            setTimeout(() => {
+                isDiceRolling = false;
+                hasRolled = true;
+
+                if (roll === 6) consecutiveSixes++;
+                else consecutiveSixes = 0;
+
+                addLog(`${activePlayers[turnIndex].toUpperCase()} rolled ${roll}`);
+
+                if (consecutiveSixes === 3) {
+                    addLog(`Three 6s in a row! Turn lost.`);
+                    consecutiveSixes = 0;
+                    setTimeout(() => passTurn(false), 900);
+                    return;
+                }
+
+                const movable = getMovablePawns(activePlayers[turnIndex], roll);
+                if (movable.length === 0) {
+                    setTimeout(() => passTurn(roll === 6), 900);
+                } else {
+                    updateTurnUI();
+                    highlightMovablePawns();
+
+                    // AI auto move selection
+                    if (selectedMode === 'ai' && activePlayers[turnIndex] !== 'red') {
+                        setTimeout(() => onPawnClick(activePlayers[turnIndex], movable[0]), 800);
+                    }
+                }
+            }, 750);
+        }
+
+        function getMovablePawns(color, roll) {
+            const res = [];
+            pawns[color].forEach((pos, i) => {
+                if (pos === 999) return;
+                if (pos === -1) {
+                    if (roll === 6) res.push(i);
+                } else {
+                    if (calcNextPos(color, pos, roll) !== null) res.push(i);
+                }
+            });
+            return res;
+        }
+
+        function calcNextPos(color, curPos, roll) {
+            if (curPos >= 0 && curPos < 52) {
+                const st = START_INDEX[color];
+                let steps = (curPos - st + 52) % 52;
+                if (steps + roll >= 51) {
+                    const hStep = (steps + roll) - 51;
+                    if (hStep <= 4) return 100 + hStep;
+                    if (hStep === 5) return 999;
+                    return null;
+                }
+                return (curPos + roll) % 52;
+            } else if (curPos >= 100 && curPos <= 104) {
+                const hIdx = curPos - 100;
+                if (hIdx + roll <= 4) return 100 + hIdx + roll;
+                if (hIdx + roll === 5) return 999;
+                return null;
+            }
+            return null;
+        }
+
+        function highlightMovablePawns() {
+            document.querySelectorAll('.pawn').forEach(e => e.classList.remove('pawn-movable'));
+            if (!hasRolled) return;
+
+            const cColor = activePlayers[turnIndex];
+            const movable = getMovablePawns(cColor, currentDiceValue);
+            movable.forEach(pIdx => {
+                const pawnEl = document.querySelector(`.pawn-${cColor}[data-index="${pIdx}"]`);
+                if (pawnEl) pawnEl.classList.add('pawn-movable');
+            });
+        }
+
+        function onPawnClick(color, pIdx) {
+            if (!hasRolled || color !== activePlayers[turnIndex]) return;
+
+            const movable = getMovablePawns(color, currentDiceValue);
+            if (!movable.includes(pIdx)) return;
+
+            const curPos = pawns[color][pIdx];
+            let nextPos = curPos === -1 ? START_INDEX[color] : calcNextPos(color, curPos, currentDiceValue);
+
+            playAudio('move');
+            pawns[color][pIdx] = nextPos;
+
+            let captured = false;
+            if (nextPos >= 0 && nextPos < 52 && !SAFE_STARS.includes(nextPos)) {
+                COLOR_KEYS.forEach(enemy => {
+                    if (enemy !== color && activePlayers.includes(enemy)) {
+                        pawns[enemy].forEach((ePos, eIdx) => {
+                            if (ePos === nextPos) {
+                                pawns[enemy][eIdx] = -1;
+                                captured = true;
+                                playAudio('capture');
+                                addLog(`💥 ${color.toUpperCase()} captured ${enemy.toUpperCase()}'s pawn!`);
+                            }
+                        });
+                    }
+                });
+            }
+
+            renderPawns();
+
+            if (pawns[color].every(p => p === 999)) {
+                if (!finishedRankings.includes(color)) finishedRankings.push(color);
+                if (finishedRankings.length >= activePlayers.length - 1) {
+                    showVictory();
+                    return;
+                }
+            }
+
+            passTurn(currentDiceValue === 6 || captured || nextPos === 999);
+        }
+
+        function passTurn(extra) {
+            hasRolled = false;
+            if (!extra) {
+                do {
+                    turnIndex = (turnIndex + 1) % activePlayers.length;
+                } while (finishedRankings.includes(activePlayers[turnIndex]));
+            }
+            updateTurnUI();
+            highlightMovablePawns();
+        }
+
+        function showVictory() {
+            const winner = finishedRankings[0] || activePlayers[turnIndex];
+            if (typeof confetti === 'function') confetti({ particleCount: 100, spread: 70 });
+
+            document.getElementById('winnerText').innerText = `${winner.toUpperCase()} PLAYER WON!`;
+            const list = document.getElementById('rankingList');
+            list.innerHTML = '';
+            finishedRankings.forEach((c, i) => {
+                list.innerHTML += `<div class="flex justify-between"><span>Rank #${i+1}: ${c.toUpperCase()}</span><i class="fa-solid fa-crown text-amber-400"></i></div>`;
+            });
+
+            document.getElementById('victoryModal').classList.remove('hidden');
+            document.getElementById('victoryModal').classList.add('flex');
+        }
+
+        function leaveMatch() {
+            if (confirm("Exit match?")) location.reload();
+        }
+
+        function addLog(msg) {
+            const box = document.getElementById('logBox');
+            const p = document.createElement('p');
+            p.innerText = msg;
+            box.prepend(p);
+        }
+
+        function showRulesModal() {
+            document.getElementById('rulesModal').classList.remove('hidden');
+            document.getElementById('rulesModal').classList.add('flex');
+        }
+
+        function hideRulesModal() {
+            document.getElementById('rulesModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
